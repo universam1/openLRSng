@@ -27,7 +27,7 @@ volatile uint8_t ppmAge = 0; // age of PPM data
 
 volatile uint8_t ppmCounter = 255; // ignore data until first sync pulse
 
-uint8_t serialMode = 0; // 0 normal, 1 spektrum 1024 , 2 spektrum 2048, 3 SBUS, 4 SUMD
+uint8_t serialMode = 0; // 0 normal, 1 spektrum 1024, 2 spektrum 2048, 3 SBUS, 4 SUMD, 5 MULTI
 
 struct sbus_help {
   uint16_t ch0 : 11;
@@ -426,9 +426,15 @@ void setup(void)
 
   checkBND();
 
-  if (bind_data.serial_baudrate && (bind_data.serial_baudrate < 5)) {
+  if (bind_data.serial_baudrate && (bind_data.serial_baudrate <= 5)) {
     serialMode = bind_data.serial_baudrate;
-    TelemetrySerial.begin((serialMode == 3) ? 100000 : 115200); // SBUS is 100000 rest 115200
+    if (serialMode == 3) { // SBUS
+      TelemetrySerial.begin(100000);
+    } else if (serialMode == 5) { // MULTI
+      TelemetrySerial.begin(100000, SERIAL_8E2);
+    } else {
+      TelemetrySerial.begin(115200);
+    }
   } else {
     // switch to userdefined baudrate here
     TelemetrySerial.begin(bind_data.serial_baudrate);
@@ -465,7 +471,8 @@ void setup(void)
   }
 
   if (bind_data.flags & TELEMETRY_FRSKY) {
-    frskyInit((bind_data.flags & TELEMETRY_MASK) == TELEMETRY_SMARTPORT);
+    frskyInit((bind_data.flags & TELEMETRY_MASK) == TELEMETRY_SMARTPORT,
+      serialMode != 0);
   } else if (bind_data.flags & TELEMETRY_MASK) {
     // ?
   }
@@ -488,6 +495,7 @@ uint8_t compositeRSSI(uint8_t rssi, uint8_t linkq)
 #define SPKTRM_SYNC1 0x03
 #define SPKTRM_SYNC2 0x01
 #define SUMD_HEAD 0xa8
+#define MULTI_SYNC 0x55
 
 uint8_t frameIndex=0;
 uint32_t srxLast=0;
@@ -559,6 +567,66 @@ static inline void processSBUS(uint8_t c)
   lastSerialPPM = millis();
 }
 
+static uint16_t calculateChannel(uint16_t input) {
+  uint32_t value;
+  if (input < 204) {
+    value = 204;
+  } else {
+    value = input - 204;
+  }
+  value = (value * 1000) / 1639;
+  if (value > 999) {
+    value = 999;
+  }
+
+  return (uint16_t)value + 12;
+}
+
+static inline void processMULTI(uint8_t c)
+{
+  if (frameIndex == 0) {
+    if ((c == MULTI_SYNC) && ((millis() - lastSerialPPM) > 1)) { // prevent locking onto wrong byte in frame
+
+      frameIndex++;
+    }
+  } else if (frameIndex == 1) {
+    frameIndex++;
+  } else if (frameIndex == 2) {
+    frameIndex++;
+  } else if (frameIndex == 3) {
+    frameIndex++;
+  } else if (frameIndex <= 25) {
+    ppmWork.bytes[(frameIndex++) - 4] = c;
+    
+    if (frameIndex == 25) {
+      uint8_t set;
+      for (set = 0; set < 2; set++) {
+        PPM[(set << 3)] = calculateChannel(ppmWork.sbus.ch[set].ch0);
+        PPM[(set << 3) + 1] = calculateChannel(ppmWork.sbus.ch[set].ch1);
+        PPM[(set << 3) + 2] = calculateChannel(ppmWork.sbus.ch[set].ch2);
+        PPM[(set << 3) + 3] = calculateChannel(ppmWork.sbus.ch[set].ch3);
+        PPM[(set << 3) + 4] = calculateChannel(ppmWork.sbus.ch[set].ch4);
+        PPM[(set << 3) + 5] = calculateChannel(ppmWork.sbus.ch[set].ch5);
+        PPM[(set << 3) + 6] = calculateChannel(ppmWork.sbus.ch[set].ch6);
+        PPM[(set << 3) + 7] = calculateChannel(ppmWork.sbus.ch[set].ch7);
+      }
+
+      if ((ppmWork.sbus.status & 0x08) == 0) {
+#ifdef DEBUG_DUMP_PPM
+        ppmDump = 1;
+#endif
+        ppmAge = 0;
+      }
+
+      frameIndex = 0;
+    }
+  } else {
+    frameIndex = 0;
+  }
+
+  lastSerialPPM = millis();
+}
+
 static inline void processSUMD(uint8_t c)
 {
   if ((frameIndex == 0) && (c == SUMD_HEAD)) {
@@ -616,6 +684,8 @@ void processChannelsFromSerial(uint8_t c)
     processSBUS(c);
   } else if (serialMode==4) { // SUMD
     processSUMD(c);
+  } else if (serialMode == 5) { // MULTI
+    processMULTI(c);
   }
 }
 

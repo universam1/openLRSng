@@ -21,11 +21,13 @@ uint32_t frskyLast = 0;
 
 uint8_t frskySchedule = 0;
 
-void frskyInit(bool isSmartPort)
+void frskyInit(bool isSmartPort, bool dontInitialiseSerial)
 {
   frskyLast = micros();
   frskyIsSmartPort = isSmartPort;
-  TelemetrySerial.begin(isSmartPort ? SMARTPORT_BAUDRATE : FRSKY_BAUDRATE);
+  if (!dontInitialiseSerial) {
+    TelemetrySerial.begin(isSmartPort ? SMARTPORT_BAUDRATE : FRSKY_BAUDRATE);
+  }
 }
 
 void frskyUserData(uint8_t c)
