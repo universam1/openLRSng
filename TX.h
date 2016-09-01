@@ -413,8 +413,8 @@ void setup(void)
   ppmAge = 255;
 #ifndef SOFTSERIAL
      setupPPMinput();
-     setupRfmInterrupt();
 #endif
+     setupRfmInterrupt();
 
   sei();
 
@@ -443,7 +443,7 @@ void setup(void)
     if (serialMode == 3) { // SBUS
       TelemetrySerial.begin(100000);
     } else if (serialMode == 5) { // MULTI
-      SoftSerial.begin(100000);
+      TelemetrySerial.begin(100000);
     } else {
       TelemetrySerial.begin(115200);
     }
