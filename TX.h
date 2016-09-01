@@ -1,6 +1,8 @@
 /****************************************************
  * OpenLRSng transmitter code
  ****************************************************/
+
+
 uint8_t RF_channel = 0;
 
 uint8_t altPwrIndex = 0; // every nth packet at lower power
@@ -105,15 +107,18 @@ static inline void processPulse(uint16_t pulse)
 
 #ifdef USE_ICP1 // Use ICP1 in input capture mode
 volatile uint16_t startPulse = 0;
+#ifndef SOFTSERIAL
 ISR(TIMER1_CAPT_vect)
 {
   uint16_t stopPulse = ICR1;
   processPulse(stopPulse - startPulse); // as top is 65535 uint16 math will take care of rollover
   startPulse = stopPulse;         // Save time at pulse start
 }
+#endif
 
 void setupPPMinput()
 {
+#ifndef SOFTSERIAL
   // Setup timer1 for input capture (PSC=8 -> 0.5ms precision)
   TCCR1A = ((1 << WGM10) | (1 << WGM11));
   TCCR1B = ((1 << WGM12) | (1 << WGM13) | (1 << CS11) | (1 <<ICNC1));
@@ -123,9 +128,11 @@ void setupPPMinput()
   }
   OCR1A = 65535;
   TIMSK1 |= (1 << ICIE1);   // Enable timer1 input capture interrupt
+#endif
 }
 
 #else // sample PPM using pinchange interrupt
+#ifndef SOFTSERIAL
 ISR(PPM_Signal_Interrupt)
 {
   uint16_t pulseWidth;
@@ -135,15 +142,17 @@ ISR(PPM_Signal_Interrupt)
     processPulse(pulseWidth);
   }
 }
-
+#endif
 void setupPPMinput(void)
 {
+#ifndef SOFTSERIAL
   // Setup timer1 for input capture (PSC=8 -> 0.5ms precision)
   TCCR1A = ((1 << WGM10) | (1 << WGM11));
   TCCR1B = ((1 << WGM12) | (1 << WGM13) | (1 << CS11));
   OCR1A = 65535;
   TIMSK1 = 0;
   PPM_Pin_Interrupt_Setup
+#endif
 }
 #endif
 
@@ -383,11 +392,14 @@ void setup(void)
   pinMode(TX_MODE2, INPUT);
   digitalWrite(TX_MODE2, HIGH);
 #endif
+#ifndef SOFTSERIAL
   pinMode(PPM_IN, INPUT); //PPM from TX
   digitalWrite(PPM_IN, HIGH); // enable pullup for TX:s with open collector output
+
 #if defined (RF_OUT_INDICATOR)
   pinMode(RF_OUT_INDICATOR, OUTPUT);
   digitalWrite(RF_OUT_INDICATOR, LOW);
+#endif
 #endif
   buzzerInit();
 
@@ -398,11 +410,11 @@ void setup(void)
 #endif
   setupProfile();
   txReadEeprom();
-
-  setupPPMinput();
   ppmAge = 255;
-
-  setupRfmInterrupt();
+#ifndef SOFTSERIAL
+     setupPPMinput();
+     setupRfmInterrupt();
+#endif
 
   sei();
 
@@ -431,7 +443,7 @@ void setup(void)
     if (serialMode == 3) { // SBUS
       TelemetrySerial.begin(100000);
     } else if (serialMode == 5) { // MULTI
-      TelemetrySerial.begin(100000, SERIAL_8E2);
+      SoftSerial.begin(100000);
     } else {
       TelemetrySerial.begin(115200);
     }
