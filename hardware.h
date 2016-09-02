@@ -328,7 +328,7 @@ void rxInitHWConfig()
 #ifndef SOFTSERIAL
 #define TelemetrySerial Serial
 #else
-SoftwareSerial SoftSerial(PPM_IN, RF_OUT_INDICATOR); // RX, TX
+SoftSerial SoftSerial(PPM_IN, RF_OUT_INDICATOR); // RX, TX
 #define TelemetrySerial SoftSerial
 #endif // !SOFTSERIAL
 

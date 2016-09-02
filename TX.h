@@ -441,9 +441,9 @@ void setup(void)
   if (bind_data.serial_baudrate && (bind_data.serial_baudrate <= 5)) {
     serialMode = bind_data.serial_baudrate;
     if (serialMode == 3) { // SBUS
-      TelemetrySerial.begin(100000);
+      TelemetrySerial.begin(100000, SERIAL_8E2);
     } else if (serialMode == 5) { // MULTI
-      TelemetrySerial.begin(100000);
+      TelemetrySerial.begin(100000, SERIAL_8E2);
     } else {
       TelemetrySerial.begin(115200);
     }
@@ -766,7 +766,7 @@ uint16_t getChannel(uint8_t ch)
   }
   return v;
 }
-
+uint32_t lastrun = 0, counter = 0;
 void loop(void)
 {
 #ifdef DEBUG_DUMP_PPM
@@ -774,12 +774,12 @@ void loop(void)
     uint32_t timeTMP = millis();
     Serial.print(timeTMP - lastDump);
     lastDump = timeTMP;
-    TelemetrySerial.print(':');
+    Serial.print(':');
     for (uint8_t i = 0; i < 16; i++) {
-      TelemetrySerial.print(PPM[i]);
-      TelemetrySerial.print(',');
+      Serial.print(PPM[i]);
+      Serial.print(',');
     }
-    TelemetrySerial.println();
+    Serial.println();
     ppmDump = 0;
   }
 #endif
@@ -792,6 +792,16 @@ void loop(void)
     Red_LED_OFF;
   }
 
+counter++;
+  if (millis()/1000 != lastrun) {
+    lastrun = millis()/1000;
+    Serial.print("R:");
+    Serial.println(counter);
+    counter = 0;
+  }
+
+//Serial.print("P:");
+//uint32_t startprocess = micros();
   while (TelemetrySerial.available()) {
     uint8_t ch = TelemetrySerial.read();
     if (serialMode) {
@@ -801,6 +811,8 @@ void loop(void)
       serial_tail = (serial_tail + 1) % SERIAL_BUFSIZE;
     }
   }
+ //uint32_t stopprocess = micros() - startprocess;
+  //Serial.println(stopprocess);
 
 #ifdef __AVR_ATmega32U4__
   if (serialMode) {
