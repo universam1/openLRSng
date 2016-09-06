@@ -46,6 +46,8 @@
 // Enable to compile transmitter code, default is RX
 //#define COMPILE_TX 0 // compile RX code
 #define COMPILE_TX 1 // compile TX code
+
+// EXPERIMENTAL: Use native Pins to parse Serial PPM ( currently Multiprotocol only)
 #define SOFTSERIAL
 
 //####### BOARD TYPE #######
@@ -74,15 +76,17 @@
 //#define TEST_HALT_RX_BY_CH2 // freeze RX
 //#define TEST_HALT_TX_BY_CH3 // freeze TX
 //#define SLAVE_STATISTICS // output master/slave stats on RX serial
-#define DEBUG_DUMP_PPM // dump PPM data on serial (both TX/RX)
+//#define DEBUG_DUMP_PPM // dump PPM data on serial (both TX/RX)
 
 //####################
 //### CODE SECTION ###
 //####################
 
 #include <Arduino.h>
-#include "SoftSerial.h"
 
+#ifdef SOFTSERIAL
+#include "ExtSoftSerial.h"
+#endif
 
 #include "version.h"
 #include "binding.h"

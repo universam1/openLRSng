@@ -76,8 +76,6 @@ static const char *specialStrs[] = { "PPM","RSSI","SDA","SCL","RXD","TXD","AIN",
 #error TX module cannot be used as RX
 #endif
 
-#define TelemetrySerial Serial
-
 #define PPM_IN           A5
 #define RF_OUT_INDICATOR A4
 #define BUZZER_ACT       9
@@ -85,6 +83,13 @@ static const char *specialStrs[] = { "PPM","RSSI","SDA","SCL","RXD","TXD","AIN",
 #define PPM_Pin_Interrupt_Setup  PCMSK1 = 0x20;PCICR|=(1<<PCIE1);
 #define PPM_Signal_Interrupt PCINT1_vect
 #define PPM_Signal_Edge_Check ((PINC & 0x20)==0x20)
+
+#ifndef SOFTSERIAL
+#define TelemetrySerial Serial
+#else
+ExtSoftSerial SoftSerial(PPM_IN, RF_OUT_INDICATOR); // RX, TX
+#define TelemetrySerial SoftSerial
+#endif // !SOFTSERIAL
 
 void buzzerInit()
 {
@@ -254,6 +259,13 @@ void setupRfmInterrupt()
 #define PPM_Signal_Interrupt PCINT2_vect
 #define PPM_Signal_Edge_Check ((PIND & 0x08)==0x08)
 
+#ifndef SOFTSERIAL
+#define TelemetrySerial Serial
+#else
+ExtSoftSerial SoftSerial(PPM_IN, RF_OUT_INDICATOR); // RX, TX
+#define TelemetrySerial SoftSerial
+#endif // !SOFTSERIAL
+
 void buzzerInit()
 {
   pinMode(BUZZER_ACT, OUTPUT);
@@ -325,14 +337,6 @@ void rxInitHWConfig()
 }
 #endif
 
-#ifndef SOFTSERIAL
-#define TelemetrySerial Serial
-#else
-SoftSerial SoftSerial(PPM_IN, RF_OUT_INDICATOR); // RX, TX
-#define TelemetrySerial SoftSerial
-#endif // !SOFTSERIAL
-
-
 #define Red_LED          13
 #define Green_LED        12
 
@@ -387,7 +391,6 @@ void setupRfmInterrupt()
 #endif
 
 #if (COMPILE_TX == 1)
-#define TelemetrySerial Serial
 
 #define USE_ICP1 // use ICP1 for PPM input for less jitter
 
@@ -401,6 +404,13 @@ void setupRfmInterrupt()
 #define BUZZER_ACT 6
 #define BUZZER_PAS 3
 #define BTN 7
+
+#ifndef SOFTSERIAL
+#define TelemetrySerial Serial
+#else
+ExtSoftSerial SoftSerial(PPM_IN, A0); // RX, TX
+#define TelemetrySerial SoftSerial
+#endif // !SOFTSERIAL
 
 void buzzerInit()
 {
@@ -560,8 +570,6 @@ void setupRfmInterrupt()
 #error TX module cannot be used as RX
 #endif
 
-#define TelemetrySerial Serial
-
 #define USE_ICP1 // use ICP1 for PPM input for less jitter
 #define PPM_IN 8 // ICP1
 
@@ -577,6 +585,13 @@ void setupRfmInterrupt()
 #define Green_LED 5
 
 #define RF_OUT_INDICATOR A3 // only used for Futaba
+
+#ifndef SOFTSERIAL
+#define TelemetrySerial Serial
+#else
+ExtSoftSerial SoftSerial(PPM_IN, RF_OUT_INDICATOR); // RX, TX
+#define TelemetrySerial SoftSerial
+#endif // !SOFTSERIAL
 
 void buzzerInit()
 {
@@ -669,8 +684,6 @@ void setupRfmInterrupt()
 #if (COMPILE_TX == 1)
 // TX operation
 
-#define TelemetrySerial Serial
-
 #define USE_ICP1 // use ICP1 for PPM input for less jitter
 #define PPM_IN 8 // ICP1
 
@@ -680,6 +693,13 @@ void setupRfmInterrupt()
 #define BUZZER_PAS  3  // OCR2B
 #define BUZZER_ACT A5
 #define BTN     A4
+
+#ifndef SOFTSERIAL
+#define TelemetrySerial Serial
+#else
+ExtSoftSerial SoftSerial(PPM_IN, A0); // RX, TX
+#define TelemetrySerial SoftSerial
+#endif // !SOFTSERIAL
 
 void buzzerInit()
 {
@@ -958,8 +978,6 @@ ISR(PCINT0_vect)
 #if (COMPILE_TX == 1)
 // TX operation
 
-#define TelemetrySerial Serial
-
 #define USE_ICP1 // use ICP1 for PPM input for less jitter
 #define PPM_IN 8 // ICP1
 
@@ -968,6 +986,13 @@ ISR(PCINT0_vect)
 
 #define BUZZER_ACT A1
 #define BTN     A5 // Shorting SCL to GND will bind
+
+#ifndef SOFTSERIAL
+#define TelemetrySerial Serial
+#else
+ExtSoftSerial SoftSerial(PPM_IN, A0); // RX, TX
+#define TelemetrySerial SoftSerial
+#endif // !SOFTSERIAL
 
 void buzzerInit()
 {
@@ -1118,8 +1143,6 @@ void setupRfmInterrupt()
 #if (COMPILE_TX == 1)
 // TX operation
 
-#define TelemetrySerial Serial
-
 #define USE_ICP1 // use ICP1 for PPM input for less jitter
 #define PPM_IN 8 // ICP1
 
@@ -1129,6 +1152,13 @@ void setupRfmInterrupt()
 #define BUZZER_PAS  3  // OCR2B
 #define BUZZER_ACT A5
 #define BTN     A4
+
+#ifndef SOFTSERIAL
+#define TelemetrySerial Serial
+#else
+ExtSoftSerial SoftSerial(PPM_IN, A0); // RX, TX
+#define TelemetrySerial SoftSerial
+#endif // !SOFTSERIAL
 
 void buzzerInit()
 {
@@ -1277,8 +1307,6 @@ void setupRfmInterrupt()
 #if (COMPILE_TX == 1)
 // TX operation
 
-#define TelemetrySerial Serial
-
 #define USE_ICP1 // use ICP1 for PPM input for less jitter
 #define PPM_IN 8 // ICP1
 
@@ -1287,6 +1315,13 @@ void setupRfmInterrupt()
 
 #define BUZZER_ACT 10
 #define BTN     A5 // Shorting SCL to GND will bind
+
+#ifndef SOFTSERIAL
+#define TelemetrySerial Serial
+#else
+ExtSoftSerial SoftSerial(PPM_IN, A0); // RX, TX
+#define TelemetrySerial SoftSerial
+#endif // !SOFTSERIAL
 
 void buzzerInit()
 {

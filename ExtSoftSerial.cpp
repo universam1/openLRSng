@@ -1,5 +1,7 @@
 /*
-SoftSerial.cpp (formerly NewSoftSerial.cpp) - 
+-- Customized Software Serial with Parity processing to fit Multicode
+
+ExtSoftSerial.cpp (formerly NewSoftSerial.cpp) - 
 Multi-instance software serial library for Arduino/Wiring
 -- Interrupt-driven receive and other improvements by ladyada
    (http://ladyada.net)
@@ -41,16 +43,16 @@ http://arduiniana.org.
 #include <avr/interrupt.h>
 #include <avr/pgmspace.h>
 #include <Arduino.h>
-#include "SoftSerial.h"
+#include "ExtSoftSerial.h"
 #include <util/delay_basic.h>
 
 //
 // Statics
 //
-SoftSerial *SoftSerial::active_object = 0;
-uint8_t SoftSerial::_receive_buffer[_SS_MAX_RX_BUFF]; 
-volatile uint8_t SoftSerial::_receive_buffer_tail = 0;
-volatile uint8_t SoftSerial::_receive_buffer_head = 0;
+ExtSoftSerial *ExtSoftSerial::active_object = 0;
+uint16_t ExtSoftSerial::_receive_buffer[_SS_MAX_RX_BUFF]; 
+volatile uint8_t ExtSoftSerial::_receive_buffer_tail = 0;
+volatile uint8_t ExtSoftSerial::_receive_buffer_head = 0;
 
 //
 // Debugging
@@ -78,13 +80,13 @@ inline void DebugPulse(uint8_t, uint8_t) {}
 //
 
 /* static */ 
-inline void SoftSerial::tunedDelay(uint16_t delay) { 
+inline void ExtSoftSerial::tunedDelay(uint16_t delay) { 
   _delay_loop_2(delay);
 }
 
 // This function sets the current object as the "listening"
 // one and returns true if it replaces another 
-bool SoftSerial::listen()
+bool ExtSoftSerial::listen()
 {
   if (!_rx_delay_stopbit)
     return false;
@@ -106,7 +108,7 @@ bool SoftSerial::listen()
 }
 
 // Stop listening. Returns true if we were actually listening.
-bool SoftSerial::stopListening()
+bool ExtSoftSerial::stopListening()
 {
   if (active_object == this)
   {
@@ -120,7 +122,7 @@ bool SoftSerial::stopListening()
 //
 // The receive routine called by the interrupt handler
 //
-void SoftSerial::recv()
+void ExtSoftSerial::recv()
 {
 
 #if GCC_VERSION < 40302
@@ -139,31 +141,35 @@ void SoftSerial::recv()
     ::);
 #endif  
 
-  uint8_t d = 0;
+  uint16_t d = 0;
 
   // If RX line is high, then we don't see any start bit
   // so interrupt is probably not for us
-  if (_inverse_logic ? rx_pin_read() : !rx_pin_read())
-  {
+/*  if (_inverse_logic ? rx_pin_read() : !rx_pin_read())
+  {*/
     // Disable further interrupts during reception, this prevents
     // triggering another interrupt directly after we return, which can
     // cause problems at higher baudrates.
     setRxIntMsk(false);
 
-    // Wait approximately 1/2 of a bit width to "center" the sample
+// Wait approximately 1/2 of a bit width to "center" the sample
     tunedDelay(_rx_delay_centering);
     DebugPulse(_DEBUG_PIN2, 1);
 
+    //Load the config values
+    uint8_t num_bits = _num_bits;
+    uint8_t frame_num_bits = _frame_num_bits;
+
     // Read each of the 8 bits
-    for (uint8_t i = 0; i < _base_num_bits; i++)
+    for (uint8_t i = 0; i < frame_num_bits; i++)
     {
       tunedDelay(_rx_delay_intrabit);
-	  if (i < _num_bits) {
-		d >>= 1;
-		DebugPulse(_DEBUG_PIN2, 1);
-		if (rx_pin_read())
-			d |= 0x80;
-	  }
+      if (i < num_bits) {
+        d >>= 1;
+        DebugPulse(_DEBUG_PIN2, 1);
+        if (rx_pin_read())
+          d |= 0x100;
+      }
     }
 
     if (_inverse_logic)
@@ -190,7 +196,7 @@ void SoftSerial::recv()
     // Re-enable interrupts when we're sure to be inside the stop bit
     setRxIntMsk(true);
 
-  }
+//}
 
 #if GCC_VERSION < 40302
 // Work-around for avr-gcc 4.3.0 OSX version bug
@@ -208,7 +214,8 @@ void SoftSerial::recv()
 #endif
 }
 
-uint8_t SoftSerial::rx_pin_read()
+
+uint8_t ExtSoftSerial::rx_pin_read()
 {
   return *_receivePortRegister & _receiveBitMask;
 }
@@ -218,7 +225,7 @@ uint8_t SoftSerial::rx_pin_read()
 //
 
 /* static */
-inline void SoftSerial::handle_interrupt()
+inline void ExtSoftSerial::handle_interrupt()
 {
   if (active_object)
   {
@@ -229,7 +236,7 @@ inline void SoftSerial::handle_interrupt()
 #if defined(PCINT0_vect)
 ISR(PCINT0_vect)
 {
-  SoftSerial::handle_interrupt();
+  ExtSoftSerial::handle_interrupt();
 }
 #endif
 
@@ -248,7 +255,7 @@ ISR(PCINT3_vect, ISR_ALIASOF(PCINT0_vect));
 //
 // Constructor
 //
-SoftSerial::SoftSerial(uint8_t receivePin, uint8_t transmitPin, bool inverse_logic /* = false */) : 
+ExtSoftSerial::ExtSoftSerial(uint8_t receivePin, uint8_t transmitPin, bool inverse_logic /* = false */) : 
   _rx_delay_centering(0),
   _rx_delay_intrabit(0),
   _rx_delay_stopbit(0),
@@ -263,12 +270,12 @@ SoftSerial::SoftSerial(uint8_t receivePin, uint8_t transmitPin, bool inverse_log
 //
 // Destructor
 //
-SoftSerial::~SoftSerial()
+ExtSoftSerial::~ExtSoftSerial()
 {
   end();
 }
 
-void SoftSerial::setTX(uint8_t tx)
+void ExtSoftSerial::setTX(uint8_t tx)
 {
   // First write, then set output. If we do this the other way around,
   // the pin would be output low for a short while before switching to
@@ -281,7 +288,7 @@ void SoftSerial::setTX(uint8_t tx)
   _transmitPortRegister = portOutputRegister(port);
 }
 
-void SoftSerial::setRX(uint8_t rx)
+void ExtSoftSerial::setRX(uint8_t rx)
 {
   pinMode(rx, INPUT);
   if (!_inverse_logic)
@@ -292,7 +299,7 @@ void SoftSerial::setRX(uint8_t rx)
   _receivePortRegister = portInputRegister(port);
 }
 
-uint16_t SoftSerial::subtract_cap(uint16_t num, uint16_t sub) {
+inline uint16_t ExtSoftSerial::subtract_cap(uint16_t num, uint16_t sub) {
   if (num > sub)
     return num - sub;
   else
@@ -303,7 +310,7 @@ uint16_t SoftSerial::subtract_cap(uint16_t num, uint16_t sub) {
 // Public methods
 //
 
-void SoftSerial::begin(long speed, uint8_t mode)
+void ExtSoftSerial::begin(long speed, uint8_t mode)
 {
   _rx_delay_centering = _rx_delay_intrabit = _rx_delay_stopbit = _tx_delay = 0;
 
@@ -365,10 +372,20 @@ void SoftSerial::begin(long speed, uint8_t mode)
     _pcint_maskreg = digitalPinToPCMSK(_receivePin);
     _pcint_maskvalue = _BV(digitalPinToPCMSKbit(_receivePin));
 
-	_num_bits = ((mode >> 1) & 0x02) + 5;
-	_extra_stop_bits = (mode >> 3) & 0x01;
-	_parity = (mode >> 4) & 0x02;
-	_base_num_bits = _num_bits + ((_parity == 0) ? 0 : 1) + _extra_stop_bits;
+
+    uint8_t extra_stop_bits = (mode >> 3) & 0x01;
+    _parity = (mode >> 4) & 0x02;
+    _num_bits = ((mode >> 1) & 0x03) + 5  + ((_parity == 0) ? 0 : 1);
+    _frame_num_bits = _num_bits + ((_parity == 0) ? 0 : 1) + extra_stop_bits;
+
+#ifdef DEBUG_DUMP_PPM
+Serial.print("\nMode:"); Serial.print(mode, HEX);
+Serial.print(" _rx_delay_stopbit:"); Serial.print(_rx_delay_stopbit);
+Serial.print(" N:"); Serial.print(_num_bits);
+Serial.print(" S:"); Serial.print(extra_stop_bits);
+Serial.print(" P:"); Serial.print(_parity);
+Serial.print(" B:"); Serial.println(_frame_num_bits);
+#endif // DEBUG_DUMP_PPM
 
     tunedDelay(_tx_delay); // if we were low this establishes the end
   }
@@ -381,7 +398,7 @@ void SoftSerial::begin(long speed, uint8_t mode)
   listen();
 }
 
-void SoftSerial::setRxIntMsk(bool enable)
+void ExtSoftSerial::setRxIntMsk(bool enable)
 {
     if (enable)
       *_pcint_maskreg |= _pcint_maskvalue;
@@ -389,14 +406,14 @@ void SoftSerial::setRxIntMsk(bool enable)
       *_pcint_maskreg &= ~_pcint_maskvalue;
 }
 
-void SoftSerial::end()
+void ExtSoftSerial::end()
 {
   stopListening();
 }
 
 
 // Read data from buffer
-int SoftSerial::read()
+int16_t ExtSoftSerial::read()
 {
   if (!isListening())
     return -1;
@@ -406,12 +423,12 @@ int SoftSerial::read()
     return -1;
 
   // Read from "head"
-  uint8_t d = _receive_buffer[_receive_buffer_head]; // grab next byte
+  uint16_t d = _receive_buffer[_receive_buffer_head]; // grab next byte
   _receive_buffer_head = (_receive_buffer_head + 1) % _SS_MAX_RX_BUFF;
   return d;
 }
 
-int SoftSerial::available()
+int ExtSoftSerial::available()
 {
   if (!isListening())
     return 0;
@@ -419,7 +436,7 @@ int SoftSerial::available()
   return (_receive_buffer_tail + _SS_MAX_RX_BUFF - _receive_buffer_head) % _SS_MAX_RX_BUFF;
 }
 
-size_t SoftSerial::write(uint8_t b)
+size_t ExtSoftSerial::write(uint8_t b)
 {
   if (_tx_delay == 0) {
     setWriteError();
@@ -474,12 +491,12 @@ size_t SoftSerial::write(uint8_t b)
   return 1;
 }
 
-void SoftSerial::flush()
+void ExtSoftSerial::flush()
 {
   // There is no tx buffering, simply return
 }
 
-int SoftSerial::peek()
+int ExtSoftSerial::peek()
 {
   if (!isListening())
     return -1;

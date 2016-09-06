@@ -1,7 +1,7 @@
 /****************************************************
  * OpenLRSng transmitter code
  ****************************************************/
-
+#include <util/parity.h>
 
 uint8_t RF_channel = 0;
 
@@ -441,9 +441,9 @@ void setup(void)
   if (bind_data.serial_baudrate && (bind_data.serial_baudrate <= 5)) {
     serialMode = bind_data.serial_baudrate;
     if (serialMode == 3) { // SBUS
-      TelemetrySerial.begin(100000, SERIAL_8E2);
+      TelemetrySerial.begin(100000);
     } else if (serialMode == 5) { // MULTI
-      TelemetrySerial.begin(100000, SERIAL_8E2);
+      TelemetrySerial.begin(100000,SERIAL_8E1); // 8E2 would be correct but 8E1 works better as gracefully grants more time to other irq
     } else {
       TelemetrySerial.begin(115200);
     }
@@ -507,7 +507,8 @@ uint8_t compositeRSSI(uint8_t rssi, uint8_t linkq)
 #define SPKTRM_SYNC1 0x03
 #define SPKTRM_SYNC2 0x01
 #define SUMD_HEAD 0xa8
-#define MULTI_SYNC 0x55
+#define MULTI_HEADER 0x55
+#define MULTI_PROTOCOL_FRSKY_D8 0x3
 
 uint8_t frameIndex=0;
 uint32_t srxLast=0;
@@ -579,64 +580,69 @@ static inline void processSBUS(uint8_t c)
   lastSerialPPM = millis();
 }
 
-static uint16_t calculateChannel(uint16_t input) {
-  uint32_t value;
-  if (input < 204) {
-    value = 204;
-  } else {
-    value = input - 204;
-  }
-  value = (value * 1000) / 1639;
-  if (value > 999) {
-    value = 999;
-  }
 
-  return (uint16_t)value + 12;
-}
-
-static inline void processMULTI(uint8_t c)
+static inline void processMULTI(uint16_t w)
 {
+  int c = w;
+  // testing parity_even_bit
+  if (((w & 0x100)>>8) != parity_even_bit(c))
+  {
+    frameIndex = 0;
+    //Serial.println("Parity Error");
+    return;
+  }
+  
   if (frameIndex == 0) {
-    if ((c == MULTI_SYNC) && ((millis() - lastSerialPPM) > 1)) { // prevent locking onto wrong byte in frame
-
+    if (c == MULTI_HEADER) {
       frameIndex++;
     }
   } else if (frameIndex == 1) {
-    frameIndex++;
+    if ((c & 0x1F) == MULTI_PROTOCOL_FRSKY_D8) {
+      frameIndex++;
+    } else {
+      frameIndex = 0;
+    }
   } else if (frameIndex == 2) {
     frameIndex++;
   } else if (frameIndex == 3) {
     frameIndex++;
-  } else if (frameIndex <= 25) {
+  } else if (frameIndex <= 26) {
     ppmWork.bytes[(frameIndex++) - 4] = c;
-    
-    if (frameIndex == 25) {
-      uint8_t set;
-      for (set = 0; set < 2; set++) {
-        PPM[(set << 3)] = calculateChannel(ppmWork.sbus.ch[set].ch0);
-        PPM[(set << 3) + 1] = calculateChannel(ppmWork.sbus.ch[set].ch1);
-        PPM[(set << 3) + 2] = calculateChannel(ppmWork.sbus.ch[set].ch2);
-        PPM[(set << 3) + 3] = calculateChannel(ppmWork.sbus.ch[set].ch3);
-        PPM[(set << 3) + 4] = calculateChannel(ppmWork.sbus.ch[set].ch4);
-        PPM[(set << 3) + 5] = calculateChannel(ppmWork.sbus.ch[set].ch5);
-        PPM[(set << 3) + 6] = calculateChannel(ppmWork.sbus.ch[set].ch6);
-        PPM[(set << 3) + 7] = calculateChannel(ppmWork.sbus.ch[set].ch7);
-      }
-
+    if (frameIndex == 26) {
       if ((ppmWork.sbus.status & 0x08) == 0) {
+        uint8_t set;
+        for (set = 0; set < 2; set++) {
+          PPM[(set<<3)] = ppmWork.sbus.ch[set].ch0 >> 1;
+          PPM[(set<<3)+1] = ppmWork.sbus.ch[set].ch1 >> 1;
+          PPM[(set<<3)+2] = ppmWork.sbus.ch[set].ch2 >> 1;
+          PPM[(set<<3)+3] = ppmWork.sbus.ch[set].ch3 >> 1;
+          PPM[(set<<3)+4] = ppmWork.sbus.ch[set].ch4 >> 1;
+          PPM[(set<<3)+5] = ppmWork.sbus.ch[set].ch5 >> 1;
+          PPM[(set<<3)+6] = ppmWork.sbus.ch[set].ch6 >> 1;
+          PPM[(set<<3)+7] = ppmWork.sbus.ch[set].ch7 >> 1;
+        }
+
 #ifdef DEBUG_DUMP_PPM
-        ppmDump = 1;
+        uint8_t i = 0;
+        while (i < 16) {
+          if (PPM[i] == 0) { // we have a corrupt frame
+            ppmDump = 1;
+            for (uint8_t n = 0; n< 26-4;n++) {
+              Serial.print(ppmWork.bytes[n], HEX);
+              Serial.print(" ");
+            }
+            break;
+          }
+          i++;
+        }
 #endif
         ppmAge = 0;
       }
-
       frameIndex = 0;
     }
   } else {
     frameIndex = 0;
   }
-
-  lastSerialPPM = millis();
 }
 
 static inline void processSUMD(uint8_t c)
@@ -682,7 +688,7 @@ static inline void processSUMD(uint8_t c)
   }
 }
 
-void processChannelsFromSerial(uint8_t c)
+void processChannelsFromSerial(uint16_t c)
 {
   uint32_t now = micros();
   if ((now - srxLast) > 5000) {
@@ -793,17 +799,9 @@ void loop(void)
   }
 
 counter++;
-  if (millis()/1000 != lastrun) {
-    lastrun = millis()/1000;
-    Serial.print("R:");
-    Serial.println(counter);
-    counter = 0;
-  }
 
-//Serial.print("P:");
-//uint32_t startprocess = micros();
   while (TelemetrySerial.available()) {
-    uint8_t ch = TelemetrySerial.read();
+    uint16_t ch = TelemetrySerial.read();
     if (serialMode) {
       processChannelsFromSerial(ch);
     } else if (((serial_tail + 1) % SERIAL_BUFSIZE) != serial_head) {
@@ -811,8 +809,6 @@ counter++;
       serial_tail = (serial_tail + 1) % SERIAL_BUFSIZE;
     }
   }
- //uint32_t stopprocess = micros() - startprocess;
-  //Serial.println(stopprocess);
 
 #ifdef __AVR_ATmega32U4__
   if (serialMode) {

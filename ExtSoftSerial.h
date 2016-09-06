@@ -1,5 +1,7 @@
 /*
-SoftSerial.h (formerly NewSoftSerial.h) - 
+-- Customized Software Serial with Parity processing to fit Multicode
+
+ExtSoftSerial.h (formerly NewSoftSerial.h) - 
 Multi-instance software serial library for Arduino/Wiring
 -- Interrupt-driven receive and other improvements by ladyada
    (http://ladyada.net)
@@ -29,8 +31,8 @@ The latest version of this library can always be found at
 http://arduiniana.org.
 */
 
-#ifndef SoftSerial_h
-#define SoftSerial_h
+#ifndef ExtSoftSerial_h
+#define ExtSoftSerial_h
 
 #include <inttypes.h>
 #include <Stream.h>
@@ -47,7 +49,7 @@ http://arduiniana.org.
 #define GCC_VERSION (__GNUC__ * 10000 + __GNUC_MINOR__ * 100 + __GNUC_PATCHLEVEL__)
 #endif
 
-class SoftSerial : public Stream
+class ExtSoftSerial : public Stream
 {
 private:
   // per object data
@@ -68,16 +70,15 @@ private:
   uint16_t _buffer_overflow:1;
   uint16_t _inverse_logic:1;
 
-  uint8_t _num_bits:3;
+  uint8_t _num_bits:4;
   uint8_t _parity:2;
-  uint8_t _extra_stop_bits:1;
-  uint8_t _base_num_bits:4;
+  uint8_t _frame_num_bits:4;
 
   // static data
-  static uint8_t _receive_buffer[_SS_MAX_RX_BUFF]; 
+  static uint16_t _receive_buffer[_SS_MAX_RX_BUFF]; 
   static volatile uint8_t _receive_buffer_tail;
   static volatile uint8_t _receive_buffer_head;
-  static SoftSerial *active_object;
+  static ExtSoftSerial *active_object;
 
   // private methods
   inline void recv() __attribute__((__always_inline__));
@@ -94,8 +95,8 @@ private:
 
 public:
   // public methods
-  SoftSerial(uint8_t receivePin, uint8_t transmitPin, bool inverse_logic = false);
-  ~SoftSerial();
+  ExtSoftSerial(uint8_t receivePin, uint8_t transmitPin, bool inverse_logic = false);
+  ~ExtSoftSerial();
   void begin(long speed) { begin(speed, SERIAL_8N1); }
   void begin(long speed, uint8_t mode);
   bool listen();
@@ -106,7 +107,7 @@ public:
   int peek();
 
   virtual size_t write(uint8_t byte);
-  virtual int read();
+  virtual int16_t read();
   virtual int available();
   virtual void flush();
   operator bool() { return true; }
